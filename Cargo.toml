@@ -3,6 +3,10 @@ name = "monitor-switch"
 version = "0.1.0"
 authors = ["Maxwell Koo <mjkoo90@gmail.com>"]
 
+repository = "https://github.com/mjkoo/monitor-switch"
+readme = "README.md"
+license = "MIT"
+
 [dependencies]
 clap = "2.32"
 conv = "0.3"

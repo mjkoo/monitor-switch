@@ -59,7 +59,7 @@ impl DisplaySleep {
 impl Drop for DisplaySleep {
     fn drop(&mut self) {
         info!("Waiting for display communication delays before exit");
-        for display in self.0.iter_mut() {
+        for display in &mut self.0 {
             display.handle.sleep()
         }
     }
@@ -77,7 +77,7 @@ fn displays(query: (Query, bool)) -> Result<Vec<Display>, Error> {
                 Ok(d)
             }
         }).filter(|d| {
-            if let &Ok(ref d) = d {
+            if let Ok(ref d) = *d {
                 query.matches(&d.info)
             } else {
                 true
@@ -208,7 +208,11 @@ fn main() -> Result<(), Error> {
                 .unwrap()?;
 
             for mut display in displays(query)? {
-                set_input_source(&mut display, input_source)?;
+                display.update_capabilities()?;
+                // This sometimes fails but the switch still succeeded, ignore the Err for now
+                if let Err(e) = set_input_source(&mut display, input_source) {
+                    warn!("Error while setting input: {}", e)
+                }
                 sleep.add(display);
             }
         }
@@ -224,6 +228,8 @@ fn main() -> Result<(), Error> {
 
             let mut target: Option<InputSource> = None;
             for mut display in displays(query)? {
+                display.update_capabilities()?;
+
                 if target.is_none() {
                     let current = get_input_source(&mut display)?;
 
@@ -237,7 +243,10 @@ fn main() -> Result<(), Error> {
                 }
 
                 if let Some(input_source) = target {
-                    set_input_source(&mut display, input_source)?;
+                    // This sometimes fails but the switch still succeeded, ignore the Err for now
+                    if let Err(e) = set_input_source(&mut display, input_source) {
+                        warn!("Error while setting input: {}", e)
+                    }
                 }
 
                 sleep.add(display);
