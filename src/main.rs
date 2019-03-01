@@ -1,28 +1,25 @@
-/* Based heavily off of ddcset by arcnmx, https://github.com/arcnmx/ddcset-rs/ */
-extern crate clap;
-extern crate ddc_hi;
-extern crate env_logger;
+//! # monitor-switch
+//!
+//! Set or toggle multiple monitor's input sources via DDC/CI
+//!
+//! Based heavily off of ddcset by arcnmx, https://github.com/arcnmx/ddcset-rs/
 
-#[macro_use]
-extern crate conv;
-#[macro_use]
-extern crate enum_derive;
-#[macro_use]
-extern crate failure;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate macro_attr;
+use std::str::FromStr;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use conv::TryFrom;
 use ddc_hi::{Backend, Ddc, DdcHost, Display, Query};
-use failure::Error;
-use std::str::FromStr;
+use enum_derive::*;
+use env_logger;
+use failure::{bail, format_err, Error};
+use log::{info, warn};
+use macro_attr::*;
 
+/// VCP feature code for input select
 const INPUT_SELECT: u8 = 0x60;
 
 macro_attr! {
+    /// Possible input sources and their associated values
     #[derive(Clone, Copy, Debug, PartialEq, EnumDisplay!, EnumFromStr!, IterVariantNames!(InputSourceVariantNames), TryFrom!(u16))]
     #[repr(u8)]
     enum InputSource {
@@ -47,16 +44,19 @@ macro_attr! {
     }
 }
 
+/// Tracks set of displays to wait for when dropped
 #[derive(Default)]
 struct DisplaySleep(Vec<Display>);
 
 impl DisplaySleep {
+    /// Add a display to the tracked set
     fn add(&mut self, display: Display) {
         self.0.push(display)
     }
 }
 
 impl Drop for DisplaySleep {
+    /// Wait for display communication delays before exiting
     fn drop(&mut self) {
         info!("Waiting for display communication delays before exit");
         for display in &mut self.0 {
@@ -65,6 +65,7 @@ impl Drop for DisplaySleep {
     }
 }
 
+/// Return all known display handles matching a given query
 fn displays(query: (Query, bool)) -> Result<Vec<Display>, Error> {
     let needs_caps = query.1;
     let query = query.0;
@@ -85,6 +86,7 @@ fn displays(query: (Query, bool)) -> Result<Vec<Display>, Error> {
         }).collect()
 }
 
+/// Set the input source of a display to a given input
 fn set_input_source(display: &mut Display, input_source: InputSource) -> Result<(), Error> {
     if let Some(feature) = display.info.mccs_database.get(INPUT_SELECT) {
         display
@@ -95,6 +97,7 @@ fn set_input_source(display: &mut Display, input_source: InputSource) -> Result<
     }
 }
 
+/// Get the current input source of a display
 fn get_input_source(display: &mut Display) -> Result<InputSource, Error> {
     if let Some(feature) = display.info.mccs_database.get(INPUT_SELECT) {
         InputSource::try_from(display.handle.get_vcp_feature(feature.code)?.value())
